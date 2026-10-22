@@ -7,7 +7,7 @@ import pandas as pd
 import streamlit as st
 
 ROOT = Path(__file__).resolve().parent
-STATCAN = "https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid=3710004501"
+STATCAN = "https://www150.statcan.gc.ca/n1/daily-quotidien/250910/dq250910d-eng.htm"
 IRCC = "https://www.canada.ca/en/immigration-refugees-citizenship/services/study-canada/study-permit/get-documents/financial-support.html"
 WATERLOO = "https://uwaterloo.ca/future-graduate-students/funding/living-costs-and-housing"
 CONTENT_WIDTH = 1080
@@ -19,7 +19,7 @@ BUDGET_DEFAULTS = {
     "hours": 20,
     "wage": 20,
 }
-REFERENCE = {
+REFERENCE_EXPENSES = {
     "Housing and utilities": 950,
     "Groceries": 385,
     "Phone": 106,
@@ -61,27 +61,26 @@ def reference_budget_figure():
                 f'<tr><th scope="row"><span class="expense-swatch" '
                 f'style="background-color:{CATEGORY_COLORS[name]}" aria-hidden="true"></span>'
                 f'{escape(name)}</th><td>${value:,.0f}</td></tr>'
-                for name, value in REFERENCE.items()
+                for name, value in REFERENCE_EXPENSES.items()
             )
             st.html(
                 '<div class="expense-panel"><table class="expense-summary">'
                 '<caption>Reference student budget · CAD per month</caption>'
                 '<thead><tr><th scope="col">Category</th><th scope="col">Monthly cost</th></tr></thead>'
                 f'<tbody>{rows}</tbody><tfoot><tr><th scope="row">Total</th>'
-                f'<td>${sum(REFERENCE.values()):,.0f}</td></tr></tfoot></table></div>'
+                f'<td>${sum(REFERENCE_EXPENSES.values()):,.0f}</td></tr></tfoot></table></div>'
             )
         st.caption(f"Source: [University of Waterloo, living costs and housing]({WATERLOO}). Created using Tableau Desktop")
 
 
 @st.cache_data
-def load_tuition():
-    """Read only the source tables used by the page's tuition explanations."""
-    domestic = pd.read_csv(ROOT / "Canadian_student.csv").set_index("Year")
-    international = pd.read_csv(ROOT / "International_student.csv").set_index("Year")
-    graduate = pd.read_csv(ROOT / "graduate_tuition_region.csv").set_index("Region")
-    if not domestic.index.equals(international.index):
+def validate_tuition_sources():
+    """Validate source files once; the page displays their pre-exported images."""
+    domestic_years = pd.read_csv(ROOT / "Canadian_student.csv").set_index("Year").index
+    international_years = pd.read_csv(ROOT / "International_student.csv").set_index("Year").index
+    pd.read_csv(ROOT / "graduate_tuition_region.csv").set_index("Region")
+    if not domestic_years.equals(international_years):
         raise ValueError("Domestic and international tuition years do not align.")
-    return domestic, international, graduate
 
 
 def tableau(filename):
@@ -122,7 +121,7 @@ def budget_calculator():
     for name, value in BUDGET_DEFAULTS.items():
         st.session_state.setdefault(f"budget_{name}", value)
     with st.container(border=True, key="budget_calculator"):
-        st.subheader("Build Calculator")
+        st.subheader("Monthly Budget")
         left, right = st.columns(2, gap="large")
         with left:
             housing = budget_slider("Housing & utilities", "housing", 400, 3000, 25)
@@ -153,6 +152,7 @@ def budget_calculator():
             f'<strong class="budget-balance {status}">{signed_balance}</strong></div>'
         )
 
+
 def main():
     st.set_page_config(
         page_title="Dat Duong",
@@ -161,8 +161,7 @@ def main():
     )
     st.html(f"<style>{(ROOT / 'style.css').read_text(encoding='utf-8')}</style>")
     try:
-        # Retain source-file validation even though narrative figures are authored text.
-        load_tuition()
+        validate_tuition_sources()
     except (OSError, ValueError, KeyError) as error:
         st.error(f"The original tuition CSV files could not be loaded: {error}")
         st.stop()
@@ -171,7 +170,7 @@ def main():
         with st.container(width=CONTENT_WIDTH):
             st.title("The Dream of Study in Canada")
             st.header("Part I: The Opportunity")
-            prose("For as long as she can remember, An has dreamed of studying abroad. Growing up in Vietnam, she imagined what it would be like to experience a new country. "
+            prose("Studying abroad has been An's dream since she was a kid. Growing up in Vietnam, she imagined what it would be like to experience a new country. "
                   "Meet people from different background and pursue an education overseas")
             prose("Now, at 22, that dream has become a reality. An is pursuing her master's degree at the University of Waterloo in Ontario. She rents a room in a shared house and work part-time while balancing her classes, assignment, and everyday responsibilites. ")
             prose("Moving to Canada has opened the door to new opportunities, but it als brought financial challenges she hadn't fully understood before arriving. Beyond tuition, An must think about rent, groceries, transportation, and all the smaller expenses that come with living independently. "
@@ -264,11 +263,12 @@ def main():
 
             budget_calculator()
 
-            prose("At first glance, An's budget may seem manageable. With monthly expenses of **$1,555** and estimated earnings of **$1,646**, there is a small surplus of around $91."
+            prose("At first glance, An's budget may seem manageable. With monthly expenses of **$1,555** and estimated earnings of **$1,733**, there is a small surplus of around **$178.33**."
                   "But that leaves very little room for unexpected expenses and savings. A higher grocery bill, an increase in rent, or even a few missed work shifts could quickly turn that surplus into a shortfall. "
                   "And with 20 hours of work each week, An must also consider how much time remains for studying and other responsibilities. ")
             prose("This has shown one of the challenges that every international students not just An face in Canada. Balancing a budget is not just about earning enough to pay the bills. "
                   "It is also about making financial decisions that allow students to focus on the educationt that they came here to pursue.")
+
 
 if __name__ == "__main__":
     main()
