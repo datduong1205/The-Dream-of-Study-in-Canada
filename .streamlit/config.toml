@@ -1,0 +1,12 @@
+# Native theme keeps the map switch and focus states consistently light.
+# Visual typography and spacing live in style.css.
+[theme]
+base = "light"
+primaryColor = "#0ea5e9"
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f8fafc"
+textColor = "#343541"
+font = "sans serif"
+
+[client]
+showSidebarNavigation = false
