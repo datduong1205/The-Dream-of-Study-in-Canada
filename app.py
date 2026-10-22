@@ -1,5 +1,3 @@
-"""An editorial data story. Run with: python -m streamlit run app.py."""
-
 from html import escape
 from pathlib import Path
 
@@ -30,7 +28,6 @@ REFERENCE_EXPENSES = {
     "Transportation": 28,
     "Books and supplies": 247,
 }
-# Explicit category keys keep chart and table colours stable if rows are reordered.
 CATEGORY_COLORS = {
     "Housing and utilities": "#1c83e1",
     "Groceries": "#84cc16",
@@ -45,12 +42,10 @@ CATEGORY_COLORS = {
 
 
 def prose(text, *, allow_html=False):
-    """Escape dollar signs so adjacent prices never become inline LaTeX."""
     st.markdown(text.replace("$", r"\$"), unsafe_allow_html=allow_html)
 
 
 def reference_budget_figure():
-    """Pair the composition graphic with an exact, accessible category summary."""
     with st.container(key="figure_reference_budget"):
         chart, summary = st.columns([1, 1.15], gap="large", vertical_alignment="center")
         with chart:
@@ -75,7 +70,6 @@ def reference_budget_figure():
 
 @st.cache_data
 def validate_tuition_sources():
-    """Validate source files once; the page displays their pre-exported images."""
     domestic_years = pd.read_csv(ROOT / "Canadian_student.csv").set_index("Year").index
     international_years = pd.read_csv(ROOT / "International_student.csv").set_index("Year").index
     pd.read_csv(ROOT / "graduate_tuition_region.csv").set_index("Region")
@@ -93,7 +87,6 @@ def tableau(filename):
 
 
 def budget_totals(housing, groceries, transportation, phone, hours, wage):
-    """Convert weekly gross pay to a monthly average, without rounding intermediate values."""
     expenses = housing + groceries + transportation + phone
     earnings = hours * wage * 52 / 12
     return expenses, earnings, earnings - expenses
