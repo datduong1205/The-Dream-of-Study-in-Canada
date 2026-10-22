@@ -54,14 +54,28 @@
 .tuition-domestic-graduate { color: #4e79a7; font-weight: 600; }
 .st-key-story [data-testid="stImage"] { margin-top: 1rem; }
 .st-key-story [data-testid="stImage"] img { height: auto; object-fit: contain; }
-.st-key-story [data-testid="stPlotlyChart"] { margin: 0.25rem 0 1.25rem; }
+.st-key-reference_donut [data-testid="stImage"] { margin: 0.25rem 0 0; }
+.st-key-reference_donut [data-testid="stImage"] img {
+    width: 100%;
+    height: 320px;
+    object-fit: contain;
+}
 /* Keep the source near its figure, then pause before the interpretation. */
 .st-key-story [class*="st-key-figure_"] { margin-bottom: 1.6rem; }
 .st-key-story [class*="st-key-figure_"] [data-testid="stVerticalBlock"] { gap: 0.6rem; }
-.st-key-figure_reference_budget [data-testid="stPlotlyChart"] { margin-bottom: 0; }
+.expense-panel {
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 14px;
+    background: #fff;
+}
 .expense-summary {
     width: 100%;
-    border-collapse: collapse;
+    border-collapse: separate;
+    border-spacing: 0;
+    border: 1px solid #e2e8f0;
+    border-radius: 0 0 6px 6px;
+    overflow: hidden;
     font-family: var(--story-sans);
     font-size: 13px;
     color: var(--story-text);
@@ -71,15 +85,25 @@
     text-align: left;
     color: var(--story-muted);
     font-size: 11px;
-    padding-bottom: 0.6rem;
+    padding: 0.75rem;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-bottom: 0;
+    border-radius: 6px 6px 0 0;
 }
 .expense-summary th, .expense-summary td {
-    padding: 0.48rem 0;
+    padding: 0.48rem 0.75rem;
     border-bottom: 1px solid #edf1f7;
     text-align: left;
     font-weight: 400;
 }
-.expense-summary thead th { color: var(--story-muted); font-size: 11px; font-weight: 500; }
+.expense-summary thead th {
+    background: #f8fafc;
+    color: var(--story-muted);
+    font-size: 11px;
+    font-weight: 500;
+}
+.expense-summary tr > :first-child { border-right: 1px solid #edf1f7; }
 .expense-summary th:last-child, .expense-summary td { text-align: right; white-space: nowrap; }
 .expense-summary tfoot th, .expense-summary tfoot td {
     font-weight: 600;
@@ -96,6 +120,9 @@
 }
 .ircc-stat {
     width: 100%;
+    box-sizing: border-box;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
     padding: 2.5rem 0 3rem;
     text-align: center;
     font-family: var(--story-sans);
@@ -114,7 +141,13 @@
 .ircc-stat-unit { font-size: 14px; line-height: 1.4; margin-top: 0.4rem; }
 .ircc-stat-details { font-size: 12px; line-height: 1.6; margin-top: 1.5rem; }
 
-/* The map switch is the page's only native input control. */
+/* Native controls share the article's light theme and blue focus accent. */
+.st-key-map_group button {
+    box-sizing: border-box;
+    width: 150px;
+    flex: 0 0 150px;
+    justify-content: center;
+}
 .st-key-story [data-testid="stWidgetLabel"] p {
     font-family: var(--story-sans);
     font-size: 12px;
@@ -128,3 +161,46 @@
     box-shadow: none;
 }
 .st-key-story button:focus-visible { outline: 2px solid var(--story-blue); outline-offset: 2px; }
+
+/* The calculator follows the same thin outlines and editorial typography. */
+.st-key-budget_calculator {
+    border-color: #e2e8f0;
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-top: 1rem;
+}
+.st-key-budget_calculator h3 { margin-top: 0; font-size: 24px; }
+.budget-control-label {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-top: 0.6rem;
+    font-family: var(--story-sans);
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--story-text);
+}
+.budget-control-label span:last-child { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.budget-results {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 1.1rem 1.25rem;
+    margin-top: 1rem;
+    font-family: var(--story-sans);
+    font-size: 14px;
+    font-variant-numeric: tabular-nums;
+    color: var(--story-text);
+}
+.budget-result-row, .budget-balance-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 1rem;
+    padding: 0.4rem 0;
+}
+.budget-result-row span { color: var(--story-muted); }
+.budget-balance-row { border-top: 1px solid #e2e8f0; margin-top: 0.8rem; padding-top: 1rem; }
+.budget-balance { font-size: 30px; line-height: 1.2; white-space: nowrap; }
+.budget-balance.surplus { color: #16805e; }
+.budget-balance.shortfall { color: #b84b5d; }

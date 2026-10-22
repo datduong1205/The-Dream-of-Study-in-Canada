@@ -4,17 +4,21 @@ from html import escape
 from pathlib import Path
 
 import pandas as pd
-import plotly.graph_objects as go
 import streamlit as st
-
 
 ROOT = Path(__file__).resolve().parent
 STATCAN = "https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid=3710004501"
 IRCC = "https://www.canada.ca/en/immigration-refugees-citizenship/services/study-canada/study-permit/get-documents/financial-support.html"
 WATERLOO = "https://uwaterloo.ca/future-graduate-students/funding/living-costs-and-housing"
-# Text, figures and controls share one editorial measure and the same left edge.
 CONTENT_WIDTH = 1080
-PLOT_CONFIG = {"displayModeBar": False, "scrollZoom": False}
+BUDGET_DEFAULTS = {
+    "housing": 950,
+    "groceries": 380,
+    "transportation": 175,
+    "phone": 50,
+    "hours": 20,
+    "wage": 20,
+}
 REFERENCE = {
     "Housing and utilities": 950,
     "Groceries": 385,
@@ -26,42 +30,23 @@ REFERENCE = {
     "Transportation": 28,
     "Books and supplies": 247,
 }
-# Palette roots from the Movies demo's theme; used by the expense chart and summary table.
-CATEGORY_COLORS = dict(zip(REFERENCE, [
-    "#1c83e1", "#84cc16", "#f43f5e", "#f59e0b", "#10b981",
-    "#8b5cf6", "#2dd4bf", "#f97316", "#79b9f0",
-]))
+# Explicit category keys keep chart and table colours stable if rows are reordered.
+CATEGORY_COLORS = {
+    "Housing and utilities": "#1c83e1",
+    "Groceries": "#84cc16",
+    "Phone": "#f43f5e",
+    "Entertainment": "#f59e0b",
+    "Personal care": "#10b981",
+    "Clothing": "#8b5cf6",
+    "Laundry": "#2dd4bf",
+    "Transportation": "#f97316",
+    "Books and supplies": "#79b9f0",
+}
+
+
 def prose(text, *, allow_html=False):
     """Escape dollar signs so adjacent prices never become inline LaTeX."""
     st.markdown(text.replace("$", r"\$"), unsafe_allow_html=allow_html)
-
-
-def expense_donut(expenses):
-    """Build the reference expense chart with its centered monthly total."""
-    fig = go.Figure(go.Pie(
-        labels=list(expenses), values=list(expenses.values()), hole=0.68,
-        sort=False, direction="clockwise", textinfo="none",
-        marker=dict(colors=[CATEGORY_COLORS[name] for name in expenses], line=dict(width=0)),
-        hovertemplate="%{label}<br>CAD $%{value:,.0f} / month<br>%{percent}<extra></extra>",
-    ))
-    fig.update_layout(
-        template="plotly_white", height=320,
-        font=dict(family="IBM Plex Sans, Arial, sans-serif", size=12, color="#343541"),
-        paper_bgcolor="#ffffff", plot_bgcolor="#ffffff",
-        hoverlabel=dict(bgcolor="white", font_color="#343541"),
-        separators=".,",
-        margin=dict(l=16, r=16, t=16, b=16), showlegend=False,
-        annotations=[
-            dict(x=0.5, y=0.54, xref="paper", yref="paper", showarrow=False,
-                 xanchor="center", yanchor="middle", align="center",
-                 text=f"<b>${sum(expenses.values()):,.0f}</b>", font_size=24),
-            dict(x=0.5, y=0.43, xref="paper", yref="paper", showarrow=False,
-                 xanchor="center", yanchor="middle", align="center",
-                 text="CAD per month", font=dict(size=12, color="#77808f")),
-        ],
-    )
-    fig.update_traces(domain=dict(x=[0, 1], y=[0, 1]))
-    return fig
 
 
 def reference_budget_figure():
@@ -69,8 +54,8 @@ def reference_budget_figure():
     with st.container(key="figure_reference_budget"):
         chart, summary = st.columns([1, 1.15], gap="large", vertical_alignment="center")
         with chart:
-            st.plotly_chart(expense_donut(REFERENCE), width="stretch", config=PLOT_CONFIG,
-                            theme=None, key="reference_expenses")
+            with st.container(key="reference_donut"):
+                st.image(str(ROOT / "donut_chart.png"), width="stretch")
         with summary:
             rows = "".join(
                 f'<tr><th scope="row"><span class="expense-swatch" '
@@ -79,14 +64,13 @@ def reference_budget_figure():
                 for name, value in REFERENCE.items()
             )
             st.html(
-                '<table class="expense-summary"><caption>Reference student budget · CAD per month</caption>'
+                '<div class="expense-panel"><table class="expense-summary">'
+                '<caption>Reference student budget · CAD per month</caption>'
                 '<thead><tr><th scope="col">Category</th><th scope="col">Monthly cost</th></tr></thead>'
                 f'<tbody>{rows}</tbody><tfoot><tr><th scope="row">Total</th>'
-                f'<td>${sum(REFERENCE.values()):,.0f}</td></tr></tfoot></table>'
+                f'<td>${sum(REFERENCE.values()):,.0f}</td></tr></tfoot></table></div>'
             )
-        st.caption(f"Source: [University of Waterloo, living costs and housing]({WATERLOO}), "
-                   "monthly estimates checked October 21, 2026. Housing uses the $950 lower bound; "
-                   "transport is additional to UPass. Publication year is not specified on the table.")
+        st.caption(f"Source: [University of Waterloo, living costs and housing]({WATERLOO}). Created using Tableau Desktop")
 
 
 @st.cache_data
@@ -109,6 +93,66 @@ def tableau(filename):
         )
 
 
+def budget_totals(housing, groceries, transportation, phone, hours, wage):
+    """Convert weekly gross pay to a monthly average, without rounding intermediate values."""
+    expenses = housing + groceries + transportation + phone
+    earnings = hours * wage * 52 / 12
+    return expenses, earnings, earnings - expenses
+
+
+def budget_slider(label, name, minimum, maximum, step, unit="currency"):
+    value = st.session_state[f"budget_{name}"]
+    display = f"${value:,.0f}" if unit == "currency" else f"{value} h"
+    st.html(
+        f'<div class="budget-control-label"><span>{escape(label)}</span>'
+        f'<span>{display}</span></div>'
+    )
+    return st.slider(
+        label,
+        min_value=minimum,
+        max_value=maximum,
+        step=step,
+        key=f"budget_{name}",
+        label_visibility="collapsed",
+    )
+
+
+@st.fragment
+def budget_calculator():
+    for name, value in BUDGET_DEFAULTS.items():
+        st.session_state.setdefault(f"budget_{name}", value)
+    with st.container(border=True, key="budget_calculator"):
+        st.subheader("Build Calculator")
+        left, right = st.columns(2, gap="large")
+        with left:
+            housing = budget_slider("Housing & utilities", "housing", 400, 3000, 25)
+            transportation = budget_slider("Transportation", "transportation", 0, 300, 5)
+        with right:
+            groceries = budget_slider("Groceries", "groceries", 150, 700, 5)
+            phone = budget_slider("Phone bills", "phone", 0, 200, 1)
+        hours = budget_slider(
+            "Part-time work (hours/week)", "hours", 0, 24, 1, unit="hours"
+        )
+        wage = budget_slider("Hourly wage (CAD)", "wage", 0, 50, 1)
+        expenses, earnings, balance = budget_totals(
+            housing, groceries, transportation, phone, hours, wage
+        )
+        if balance > 0:
+            status = "surplus"
+        elif balance < 0:
+            status = "shortfall"
+        else:
+            status = "balanced"
+        sign = "+" if balance > 0 else "−" if balance < 0 else ""
+        signed_balance = f"{sign}${abs(balance):,.2f}"
+        st.html(
+            '<section class="budget-results" aria-label="Monthly budget results" aria-live="polite">'
+            f'<div class="budget-result-row"><span>Monthly expenses</span><strong>${expenses:,.2f}</strong></div>'
+            f'<div class="budget-result-row"><span>Estimated gross earnings</span><strong>${earnings:,.2f}</strong></div>'
+            '<div class="budget-balance-row"><strong>Monthly balance</strong>'
+            f'<strong class="budget-balance {status}">{signed_balance}</strong></div>'
+        )
+
 def main():
     st.set_page_config(
         page_title="Dat Duong",
@@ -117,108 +161,114 @@ def main():
     )
     st.html(f"<style>{(ROOT / 'style.css').read_text(encoding='utf-8')}</style>")
     try:
-        domestic, international, graduate = load_tuition()
+        # Retain source-file validation even though narrative figures are authored text.
+        load_tuition()
     except (OSError, ValueError, KeyError) as error:
         st.error(f"The original tuition CSV files could not be loaded: {error}")
         st.stop()
-    first, latest = int(domestic.index.min()), int(domestic.index.max())
-    du = int(domestic.loc[latest, "Canadian undergraduate students"])
-    iu = int(international.loc[latest, "International undergraduate students"])
-    dg = int(domestic.loc[latest, "Canadian graduate students"])
-    ig = int(international.loc[latest, "International graduate students"])
-    first_gap = int(international.loc[first, "International undergraduate students"]
-                    - domestic.loc[first, "Canadian undergraduate students"])
-    provinces = graduate.drop(index="Canada")
 
     with st.container(key="story", horizontal_alignment="center"):
         with st.container(width=CONTENT_WIDTH):
-            st.title("Cost of Living in Canada")
-            st.caption("The Financial Reality of International Students")
-            prose("Studying abroad is an exciting opportunity, but moving to a new country also mean that you have to learn how to manage life in a country where you know nobody. "
-                  "As an international student in Canada, I have come to realize that the cost of education goes far beyond university tuition. "
-                  "From finding a place to live to buying groceries and getting around the city, everyday expenses quickly become part of my experience. ")
-            prose("In this story, I want to explore what it really costs to study and live in Canada. Using official statistics (mostly by Canada Goverment)"
-                  "to look at the financial challenges international students like myself face and the decisons that come with them.")
+            st.title("The Dream of Study in Canada")
+            st.header("Part I: The Opportunity")
+            prose("For as long as she can remember, An has dreamed of studying abroad. Growing up in Vietnam, she imagined what it would be like to experience a new country. "
+                  "Meet people from different background and pursue an education overseas")
+            prose("Now, at 22, that dream has become a reality. An is pursuing her master's degree at the University of Waterloo in Ontario. She rents a room in a shared house and work part-time while balancing her classes, assignment, and everyday responsibilites. ")
+            prose("Moving to Canada has opened the door to new opportunities, but it als brought financial challenges she hadn't fully understood before arriving. Beyond tuition, An must think about rent, groceries, transportation, and all the smaller expenses that come with living independently. "
+                  "Through An's journey, we'll explore what it really costs to study in Canada and the financial decisions that international student like her face along the way.")
             st.image(str(ROOT / "nathan_philips.jpg"), width="stretch")
-            st.header("Part I: The Price of Education")
-            prose("When I first considered studying in Canada, tuition was one of the biggest expenses I had to think about. "
-                  "I knew international students generally paid more than domestic students"
-                  "but I wanted to understand just how large that difference was and how it had changed overtime.")
-            prose("The chart below compares average tuition fees for domestic and international undergraduate and graduate students "
-                  "from the academic year **2015/2016** to **2025/2026**. The line chart reveals how differently tuition costs have changed for the groups over the past decade.")
+            st.header("Part II: The Price of Education")
+            prose("Before coming to Canada, An knew studying abroad would be expensive. Tuition was one of "
+                  "the first things she and her family had to consider. She expected international students to pay more "
+                  "than domestic students, but **how much more ?**")
 
         with st.container(width=CONTENT_WIDTH, key="tuition_figure"):
             tableau("tuition_trend.png")
         with st.container(width=CONTENT_WIDTH):
-            prose('In **2025/2026**, the average international undergraduate tuition fee reached '
+            prose('In **2025/2026**, international undergraduate students paid an average of '
                   '<span class="tuition-international-undergraduate">$41,746</span> per year, '
                   'while domestic students paid <span class="tuition-domestic-undergraduate">$7,734</span> on average. '
-                  "That's roughly 5.4 times higher. The difference has also grown over time, making tuition an inreasingly important financial consideration for students coming abroad. "
-                  'For graduate students, the gap is also significant. International students paid an average of '
-                  '<span class="tuition-international-graduate">$24,028</span> compared to '
-                  '<span class="tuition-domestic-graduate">$7,978</span> for domestic students.',
+                  "That's about 5.4 times as much. The undergraduate gap has also widened over the decade, with international undergraduate tuition rising considerably faster. ",
                   allow_html=True)
-            prose("But tuition isn't the same everywhere in Canada. Where a student choose to study can also make a big difference.")
-
-            st.subheader("Where You Study Matters")
-            prose("A national average can hide considerable variation. These maps compare annual graduate tuition "
-                  "for **2025/2026** across the ten provinces in the supplied data. Switch student groups to see how "
-                  "the comparison changes.")
+            prose("For An, who is pursuing a master's degree, the graduate figures are more relevant. "
+                  "International graduate students paid an average of "
+                  '<span class="tuition-international-graduate">$24,028</span> compared to '
+                  '<span class="tuition-domestic-graduate">$7,978</span> for domestic students. '
+                  "Although the exact fees would vary depend on program and university but these figures would suggest her the range she need to commit to. ",
+                  allow_html=True)
+            prose("However, An soon discover that where she chooses to study and live also matter as much.")
+            st.subheader("Where You Study Also Matters")
+            prose("When An choosing a university, she focused on finding a program that matched her interest and future career goals. "
+                  "The University of Waterloo offered her the program she was looking for at one of the top ranking university in Canada."
+                  "But studying in Ontario also meant that she will have to manage her budget more tightly. ")
+            prose("tuition fees can vary considerably depending on the province. The maps below compare average graduate tuition for domestic and international students across ten Canadian provinces in **2025/2026**."
+                  "Switch between the two tab to see how the costs change. ")
+            prose("Ontario, where An studies, had the highest average international graduate tuition at **$28,624**, while Newfoundland and Labrador had the lowest at **$6,964**. That's more than four times the amount.")
+            prose("**Why such a large difference?** "
+                  "In Canada, provincianl government play an important role in funding universities and regulating tuition. Each province has its own education policies while tuition also differ in universities, their programs and funding recieved.")
+            prose("Canada's immigration policies also an important reason. As the federal government has introduced limits on international study permits and distributes application allocations across provinces and territories, partly in response to pressures on housing and public services. "
+                  "This means institutions that rely heavily on international students will be short on their revenue. ")
         with st.container(width=CONTENT_WIDTH):
-            group = st.segmented_control("Compare graduate tuition", ["International", "Domestic"],
-                                         default="International", key="map_group")
+            group = st.segmented_control("Compare graduate tuition", ["Domestic", "International"],
+                                         default="Domestic", key="map_group")
             tableau("domestic_tuition_map.png" if group == "Domestic" else "international_tuition_map.png")
-        with st.container(width=CONTENT_WIDTH):
-            high = provinces["International students"].idxmax()
-            low = provinces["International students"].idxmin()
-            prose(f"Ontario has the highest international graduate average among the ten provinces, at "
-                  f"${provinces.loc[high, 'International students']:,}; {low} has the lowest, at "
-                  f"${provinces.loc[low, 'International students']:,}. Ontario's domestic graduate average is "
-                  f"${provinces.loc['Ontario', 'Canadian students']:,}. These provincial comparisons exclude "
-                  "the Canada aggregate and do not describe undergraduate tuition.")
-            prose("But tuition is only part of the financial commitment. Once students arrive in Canada, "
-                  "another set of expenses becomes part of their everyday lives.")
 
-            st.header("Part II: Beyond Tuition")
-            prose("Before arrival, students need to demonstrate that they have funds for daily life. "
-                  "After arrival, those funds become a series of recurring expenses.")
-            st.subheader("A financial starting point")
+            prose("Ontario has the highest average international graduate tuition among these ten "
+                  "provinces at **$28,624**, while Newfoundland and Labrador has the lowest at **$6,964**. "
+                  "That is more than four times as much. These are provincial averages rather than "
+                  "individual program fees, so An still needs to check the costs of her own degree.")
+            prose("The comparison adds a financial dimension to her choice of university. A program's "
+                  "location matters alongside its academic opportunities—and tuition is only the beginning. "
+                  "Once she arrives in Waterloo, another set of expenses becomes part of everyday life.")
+
+            st.header("Part III: Beyond Tuition")
+            prose("After arriving in Waterloo, An begins settling into her new routine. Between attending lectures, completing assignment, and working part-time, she also has to manage the responsibilies when living alone. "
+                  "Every month, there is rent to pay, groceries to buy, and several other fees such as transportation, entertainment, or insurance.")
+            prose("Before coming to Canada, An also had to demonstrate that she had the sufficient funds to support herself while studying. But how much money does the Canadian goverment expect she to have? ")
+            st.subheader("Initial Financial Requirement")
             st.html(
-                '<section class="ircc-stat" aria-label="Living-expense proof of funds">'
-                '<div class="ircc-stat-context">Living-expense proof of funds · one person outside Quebec</div>'
+                '<section class="ircc-stat" aria-label="Proof of Financial Support">'
+                '<div class="ircc-stat-context">Proof of Financial Support</div>'
                 '<div class="ircc-stat-number">$1,954</div>'
                 '<div class="ircc-stat-unit">CAD per month</div>'
                 '<div class="ircc-stat-details">Annual requirement: $23,448 · '
-                'Effective date: September 1, 2026</div>'
+                'Outside of Quebec</div>'
                 '</section>'
             )
-            prose("This is an immigration proof-of-funds requirement for applications submitted on or after "
-                  "that date, not a government-prescribed spending budget. Tuition and transportation to and "
-                  "from Canada are additional.")
-            st.caption(f"Source: [IRCC, proof of financial support]({IRCC}); annual amount divided by 12. "
-                       "Monthly equivalent of the annual requirement. Source checked October 21, 2026.")
+            st.caption(f"Source: [IRCC, proof of financial support]({IRCC})")
+            prose("")
+            prose("As required by the IRCC, An must demonstrate"
+                  " **$23,448** in living-expense funds for one year, "
+                  "equivalent to **$1,954 per month**. However, this amount is an immigration financial requirement, not a fixed monthly spending budget. "
+                  "For someone like An, who has to manage expenses while keeping up with universtiy, let's look into how much she might actually need each month.")
             st.subheader("Estimated Monthly Living Expenses")
-            prose("Published university cost estimates offer a useful starting point for planning a student "
-                  "budget in Canada. This illustrative monthly living-expense scenario uses the University "
-                  "of Waterloo's expense categories and the lower end of its housing range: "
-                  "**$2,121 per month**.")
-            prose("Use this as a reference student budget, not a Canadian national average. The underlying "
-                  "estimates are for a single person in Waterloo; actual spending varies by city, housing "
-                  "arrangement and personal habits.")
+            prose("Sharing a house means An does not live alone, but rent is still only one part of "
+                  "the budget she needs to think about. Waterloo's published living-cost estimates offer a "
+                  "useful reference for a single student in the city. They provide a useful example of what a student "
+                  "living in Waterloo might need to budget each month.")
+            prose("An pays **$950** monthly for housing and utilities (the lower end of the university's housing range), "
+                  "the total comes to **$2,121 per month**. It includes groceries, transportation, "
+                  "phone costs, books and other personal expenses. ")
+            prose("The donut chart below shows how these expenses are distributed. "
+                  "Housing takes up the largest part of An's budget, but the smaller categories also add up very quickly. "
+                  "These are basic necessities that An have to pay to maintain a normal and functional everyday life and it can make a noticeable difference.")
             reference_budget_figure()
-            prose("The reference student budget is **$167 above** the IRCC monthly equivalent. The comparison "
-                  "is illustrative: the figures have different purposes and scopes. Neither includes tuition, "
-                  "and the reference budget excludes the university's listed one-time setup costs. No inflation adjustment "
-                  "aligns the two sources.")
-            st.subheader("My Monthly Expenses")
-            prose("**Personal data to be added.** This space is reserved for my actual housing, groceries, "
-                  "transportation, phone and miscellaneous expenses. Published estimates above are separate "
-                  "from my personal spending.")
-            prose("Published estimates provide a starting point. Your housing arrangement, day-to-day spending "
-                  "and access to paid work will shape the budget you actually have to manage.")
+            prose("This reference budget is **$167 above** the what IRCC required An to demonstrate in the first place. "
+                  "The two figures serve different purposes, so this doesn't necessarily mean the government's requirement is insufficient. "
+                  "However, it does show why relying on a single estimate may not tell the whole story."
+                  " An's actual spending could be higher or lower depending on her rent and spending habits. "
+                  "She can make choices about some expenses, but still needs to meet "
+                  "basic living costs.")
 
-            st.header("Part III: Making Ends Meet")
+            st.header("Part IV: A Closer Look at An's Budget ")
 
+            budget_calculator()
+
+            prose("At first glance, An's budget may seem manageable. With monthly expenses of **$1,555** and estimated earnings of **$1,646**, there is a small surplus of around $91."
+                  "But that leaves very little room for unexpected expenses and savings. A higher grocery bill, an increase in rent, or even a few missed work shifts could quickly turn that surplus into a shortfall. "
+                  "And with 20 hours of work each week, An must also consider how much time remains for studying and other responsibilities. ")
+            prose("This has shown one of the challenges that every international students not just An face in Canada. Balancing a budget is not just about earning enough to pay the bills. "
+                  "It is also about making financial decisions that allow students to focus on the educationt that they came here to pursue.")
 
 if __name__ == "__main__":
     main()
